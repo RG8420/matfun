@@ -1,73 +1,116 @@
 #include "matrix.h"
 #include <ctype.h>
 
-Matrix *parser_parse_matrix(const char *input) {
-    const char *p = input;
+static int is_number_char(char c) {
+    return (c >= '0' && c <= '9') || c == '-' || c == '.' || c == 'e' || c == 'E';
+}
+
+static int count_matrix_dims(const char *str, int *rows, int *cols) {
+    *rows = 0;
+    *cols = 0;
     
-    // Find first '['
+    // Skip leading whitespace
+    while (*str == ' ') str++;
+    
+    // Count rows - each "],[ " separates rows
+    const char *p = str;
+    while (*p) {
+        if (*p == ']' && p[1] == ',') (*rows)++;
+        p++;
+    }
+    (*rows)++; // last row
+    
+    // Find first row content between first [ and matching ]
+    p = strchr(str, '[');
+    if (!p) return 0;
+    
+    // Skip outer [, find inner row
+    p++;
+    // Find inner [
     while (*p && *p != '[') p++;
-    if (!*p) return NULL;
+    if (!*p) return 0;
     
-    // Count rows and columns
-    int rows = 1, cols = 0, in_num = 0;
-    const char *temp = p;
-    int current_row_cols = 0;
+    // Find matching ] for inner row
+    const char *row_start = p + 1;
+    int depth = 1;
+    while (*p && depth > 0) {
+        p++;
+        if (*p == '[') depth++;
+        if (*p == ']') depth--;
+    }
+    const char *row_end = p;
     
-    while (*temp && *temp != ']') {
-        if (*temp == '[') {
-            if (current_row_cols > cols) cols = current_row_cols;
-            current_row_cols = 0;
-            rows++;
-        }
-        if (isdigit(*temp) || *temp == '-' || *temp == '.') {
-            if (!in_num) {
-                current_row_cols++;
-                in_num = 1;
-            }
+    // Count numbers in first row
+    int in_num = 0;
+    while (row_start < row_end) {
+        if (is_number_char(*row_start)) {
+            if (!in_num) { (*cols)++; in_num = 1; }
         } else {
             in_num = 0;
         }
-        temp++;
+        row_start++;
     }
-    if (current_row_cols > cols) cols = current_row_cols;
     
-    if (rows == 0 || cols == 0) return NULL;
+    return (*rows > 0 && *cols > 0) ? 1 : 0;
+}
+
+static int parse_numbers(const char *str, double *values, int max_count) {
+    int count = 0;
+    char buffer[64];
+    int buf_idx = 0;
+    int in_number = 0;
     
-    Matrix *mat = matrix_create(rows - 1, cols);
+    for (int i = 0; str[i] && count < max_count; i++) {
+        if (is_number_char(str[i])) {
+            buffer[buf_idx++] = str[i];
+            in_number = 1;
+        } else if (in_number) {
+            buffer[buf_idx] = '\0';
+            values[count++] = atof(buffer);
+            buf_idx = 0;
+            in_number = 0;
+        }
+    }
+    
+    if (in_number && buf_idx > 0 && count < max_count) {
+        buffer[buf_idx] = '\0';
+        values[count++] = atof(buffer);
+    }
+    
+    return count;
+}
+
+Matrix *parser_parse_matrix(const char *input) {
+    int rows, cols;
+    if (!count_matrix_dims(input, &rows, &cols) || rows < 1 || cols < 1) {
+        return NULL;
+    }
+    
+    Matrix *mat = matrix_create(rows, cols);
     if (!mat) return NULL;
     
-    // Extract numbers
+    // Remove brackets and parse numbers
+    char clean[4096];
+    int ci = 0;
+    for (int i = 0; input[i] && ci < 4095; i++) {
+        if (input[i] != '[' && input[i] != ']') {
+            clean[ci++] = input[i];
+        }
+    }
+    clean[ci] = '\0';
+    
     double *values = (double *)malloc(rows * cols * sizeof(double));
-    int value_count = 0;
-    
-    temp = p;
-    in_num = 0;
-    char num_buf[64];
-    int buf_idx = 0;
-    
-    while (*temp && value_count < rows * cols) {
-        if (isdigit(*temp) || *temp == '-' || *temp == '.' ) {
-            num_buf[buf_idx++] = *temp;
-            in_num = 1;
-        } else if (in_num) {
-            num_buf[buf_idx] = '\0';
-            values[value_count++] = atof(num_buf);
-            buf_idx = 0;
-            in_num = 0;
-        }
-        
-        // Skip to next number
-        if (*temp == ']') {
-            temp++;
-            while (*temp && *temp != '[' && !isdigit(*temp) && *temp != '-' ) temp++;
-            continue;
-        }
-        temp++;
+    if (!values) {
+        matrix_free(mat);
+        return NULL;
     }
     
-    // Fill matrix
-    for (int i = 0; i < value_count && i < rows * cols; i++) {
-        mat->data[i / cols][i % cols] = values[i];
+    int total = parse_numbers(clean, values, rows * cols);
+    
+    for (int i = 0; i < total && i < rows * cols; i++) {
+        int row = i / cols;
+        int col = i % cols;
+        mat->data[row][col] = values[i];
     }
     
     free(values);

@@ -100,7 +100,7 @@ static void handle_command(char *input) {
         while (*expr_trimmed == ' ') expr_trimmed++;
         
         if (strncmp(expr_trimmed, "[[", 2) == 0) {
-            Matrix *mat = parser_parse_matrix(expr);
+            Matrix *mat = parser_parse_matrix(expr_trimmed);
             if (mat) {
                 ms_set(&store, var_name, mat);
                 printf("Stored as %s:\n", var_name);
@@ -109,7 +109,7 @@ static void handle_command(char *input) {
                 printf("Error: Invalid matrix syntax\n");
             }
         } else if (expr_trimmed[0] == '[' && parser_is_vector(expr_trimmed)) {
-            Matrix *mat = parser_parse_matrix(expr);
+            Matrix *mat = parser_parse_matrix(expr_trimmed);
             if (mat) {
                 ms_set(&store, var_name, mat);
                 printf("Stored as %s:\n", var_name);
