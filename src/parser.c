@@ -1,119 +1,98 @@
 #include "matrix.h"
 #include <ctype.h>
+#include <string.h>
 
 static int is_number_char(char c) {
     return (c >= '0' && c <= '9') || c == '-' || c == '.' || c == 'e' || c == 'E';
 }
 
-static int count_matrix_dims(const char *str, int *rows, int *cols) {
-    *rows = 0;
-    *cols = 0;
-    
-    // Skip leading whitespace
-    while (*str == ' ') str++;
-    
-    // Count rows - each "],[ " separates rows
-    const char *p = str;
-    while (*p) {
-        if (*p == ']' && p[1] == ',') (*rows)++;
-        p++;
-    }
-    (*rows)++; // last row
-    
-    // Find first row content between first [ and matching ]
-    p = strchr(str, '[');
-    if (!p) return 0;
-    
-    // Skip outer [, find inner row
-    p++;
-    // Find inner [
-    while (*p && *p != '[') p++;
-    if (!*p) return 0;
-    
-    // Find matching ] for inner row
-    const char *row_start = p + 1;
-    int depth = 1;
-    while (*p && depth > 0) {
-        p++;
-        if (*p == '[') depth++;
-        if (*p == ']') depth--;
-    }
-    const char *row_end = p;
-    
-    // Count numbers in first row
+static int count_values(const char *str, int max) {
+    int count = 0;
     int in_num = 0;
-    while (row_start < row_end) {
-        if (is_number_char(*row_start)) {
-            if (!in_num) { (*cols)++; in_num = 1; }
+    for (int i = 0; str[i] && count < max; i++) {
+        if (is_number_char(str[i])) {
+            if (!in_num) { count++; in_num = 1; }
         } else {
             in_num = 0;
         }
-        row_start++;
     }
-    
-    return (*rows > 0 && *cols > 0) ? 1 : 0;
+    return count;
 }
 
-static int parse_numbers(const char *str, double *values, int max_count) {
+static double parse_value(const char **s) {
+    while (**s && !is_number_char(**s)) (*s)++;
+    double val = atof(*s);
+    while (is_number_char(**s)) (*s)++;
+    return val;
+}
+
+static int parse_row(const char *row_str, double *values, int max_cols) {
     int count = 0;
-    char buffer[64];
-    int buf_idx = 0;
-    int in_number = 0;
-    
-    for (int i = 0; str[i] && count < max_count; i++) {
-        if (is_number_char(str[i])) {
-            buffer[buf_idx++] = str[i];
-            in_number = 1;
-        } else if (in_number) {
-            buffer[buf_idx] = '\0';
-            values[count++] = atof(buffer);
-            buf_idx = 0;
-            in_number = 0;
-        }
+    const char *p = row_str;
+    while (*p && count < max_cols) {
+        while (*p && !is_number_char(*p)) p++;
+        if (!*p) break;
+        values[count++] = parse_value(&p);
     }
-    
-    if (in_number && buf_idx > 0 && count < max_count) {
-        buffer[buf_idx] = '\0';
-        values[count++] = atof(buffer);
-    }
-    
     return count;
 }
 
 Matrix *parser_parse_matrix(const char *input) {
-    int rows, cols;
-    if (!count_matrix_dims(input, &rows, &cols) || rows < 1 || cols < 1) {
-        return NULL;
-    }
+    // Skip leading whitespace
+    while (*input == ' ') input++;
     
-    Matrix *mat = matrix_create(rows, cols);
-    if (!mat) return NULL;
+    // Find the matrix content between [ and ]
+    const char *start = strchr(input, '[');
+    const char *end = strrchr(input, ']');
+    if (!start || !end || start >= end) return NULL;
     
-    // Remove brackets and parse numbers
-    char clean[4096];
-    int ci = 0;
-    for (int i = 0; input[i] && ci < 4095; i++) {
-        if (input[i] != '[' && input[i] != ']') {
-            clean[ci++] = input[i];
+    start++;
+    size_t len = end - start;
+    if (len == 0) return NULL;
+    
+    char *content = (char *)malloc(len + 1);
+    strncpy(content, start, len);
+    content[len] = '\0';
+    
+    // Split by semicolon for rows
+    char *rows[64];
+    int row_count = 0;
+    char *temp = content;
+    
+    while (*temp && row_count < 64) {
+        char *semicolon = strchr(temp, ';');
+        if (semicolon) {
+            *semicolon = '\0';
+            rows[row_count++] = temp;
+            temp = semicolon + 1;
+        } else {
+            rows[row_count++] = temp;
+            break;
         }
     }
-    clean[ci] = '\0';
     
-    double *values = (double *)malloc(rows * cols * sizeof(double));
-    if (!values) {
-        matrix_free(mat);
-        return NULL;
+    if (row_count == 0) { free(content); return NULL; }
+    
+    // Count columns from first row
+    int cols = count_values(rows[0], 1000);
+    if (cols == 0) { free(content); return NULL; }
+    
+    // Validate all rows have same columns
+    for (int i = 1; i < row_count; i++) {
+        int c = count_values(rows[i], 1000);
+        if (c != cols) { free(content); return NULL; }
     }
     
-    int total = parse_numbers(clean, values, rows * cols);
+    // Create matrix
+    Matrix *mat = matrix_create(row_count, cols);
+    if (!mat) { free(content); return NULL; }
     
-    for (int i = 0; i < total && i < rows * cols; i++) {
-        int row = i / cols;
-        int col = i % cols;
-        mat->data[row][col] = values[i];
+    // Fill matrix
+    for (int i = 0; i < row_count; i++) {
+        parse_row(rows[i], mat->data[i], cols);
     }
     
-    free(values);
+    free(content);
     return mat;
 }
 
@@ -137,6 +116,9 @@ int parser_is_vector(const char *str) {
     const char *start = strchr(str, '[');
     const char *end = strrchr(str, ']');
     if (!start || !end) return 0;
+    
+    // Vectors have no semicolons (single row)
+    if (strchr(str, ';')) return 0;
     
     start++;
     while (start < end) {

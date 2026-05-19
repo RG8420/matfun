@@ -8,9 +8,9 @@
 "===========================================================\n" \
 "              MATRIX CALCULATOR HELP\n" \
 "===========================================================\n" \
-"  Input Syntax:\n" \
-"    A = [[1,2],[3,4]]      # Create matrix\n" \
-"    v = [1,2,3]           # Create vector\n" \
+"  Input Syntax: (use semicolon for rows)\n" \
+"    A = [1 2; 3 4]        # 2x2 matrix\n" \
+"    v = [1 2 3]           # 1x3 vector\n" \
 "\n" \
 "  Variables:\n" \
 "    list              # List all matrices\n" \
@@ -99,7 +99,7 @@ static void handle_command(char *input) {
         char *expr_trimmed = expr;
         while (*expr_trimmed == ' ') expr_trimmed++;
         
-        if (strncmp(expr_trimmed, "[[", 2) == 0) {
+        if (strncmp(expr_trimmed, "[", 1) == 0) {
             Matrix *mat = parser_parse_matrix(expr_trimmed);
             if (mat) {
                 ms_set(&store, var_name, mat);
@@ -330,7 +330,7 @@ static void handle_command(char *input) {
             printf("  Cleared all matrices.\n");
         } else if (strcmp(input, "help") == 0) {
             printf("%s", HELP_TEXT);
-        } else if (strncmp(input, "[[", 2) == 0) {
+        } else if (strncmp(input, "[", 1) == 0) {
             Matrix *mat = parser_parse_matrix(input);
             if (mat) {
                 matrix_print(mat);
@@ -339,11 +339,206 @@ static void handle_command(char *input) {
                 printf("Error: Invalid matrix syntax\n");
             }
         } else {
-            Matrix *mat = ms_get(&store, input);
-            if (mat) {
-                matrix_print(mat);
+            char cmd[64], arg1[64], arg2[64], arg3[64];
+            int args = sscanf(input, "%63s %63s %63s %63s", cmd, arg1, arg2, arg3);
+            
+            Matrix *result = NULL;
+            double scalar_result = 0;
+            Matrix *m1 = NULL, *m2 = NULL;
+            
+            if (strcmp(cmd, "add") == 0 && args >= 3) {
+                m1 = ms_get(&store, arg1);
+                m2 = ms_get(&store, arg2);
+                if (m1 && m2) result = matrix_add(m1, m2);
+            } else if (strcmp(cmd, "sub") == 0 && args >= 3) {
+                m1 = ms_get(&store, arg1);
+                m2 = ms_get(&store, arg2);
+                if (m1 && m2) result = matrix_sub(m1, m2);
+            } else if (strcmp(cmd, "mult") == 0 && args >= 3) {
+                m1 = ms_get(&store, arg1);
+                m2 = ms_get(&store, arg2);
+                if (m1 && m2) result = matrix_mult(m1, m2);
+            } else if (strcmp(cmd, "emult") == 0 && args >= 3) {
+                m1 = ms_get(&store, arg1);
+                m2 = ms_get(&store, arg2);
+                if (m1 && m2) result = matrix_emult(m1, m2);
+            } else if (strcmp(cmd, "scale") == 0 && args >= 3) {
+                m1 = ms_get(&store, arg1);
+                double k = atof(arg2);
+                if (m1) result = matrix_scale(m1, k);
+            } else if (strcmp(cmd, "sadd") == 0 && args >= 3) {
+                m1 = ms_get(&store, arg1);
+                double k = atof(arg2);
+                if (m1) result = matrix_sadd(m1, k);
+            } else if (strcmp(cmd, "transpose") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) result = matrix_transpose(m1);
+            } else if (strcmp(cmd, "inverse") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) result = matrix_inverse(m1);
+            } else if (strcmp(cmd, "det") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) scalar_result = matrix_det(m1);
+            } else if (strcmp(cmd, "trace") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) scalar_result = matrix_trace(m1);
+            } else if (strcmp(cmd, "rank") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) scalar_result = matrix_rank(m1);
+            } else if (strcmp(cmd, "adjugate") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) result = matrix_adjugate(m1);
+            } else if (strcmp(cmd, "mvmult") == 0 && args >= 3) {
+                m1 = ms_get(&store, arg1);
+                m2 = ms_get(&store, arg2);
+                if (m1 && m2) result = matrix_vmult(m1, m2);
+            } else if (strcmp(cmd, "vmult") == 0 && args >= 3) {
+                m1 = ms_get(&store, arg1);
+                m2 = ms_get(&store, arg2);
+                if (m1 && m2) result = matrix_vmult(m2, m1);
+            } else if (strcmp(cmd, "dot") == 0 && args >= 3) {
+                m1 = ms_get(&store, arg1);
+                m2 = ms_get(&store, arg2);
+                if (m1 && m2) scalar_result = matrix_dot(m1, m2);
+            } else if (strcmp(cmd, "cross") == 0 && args >= 3) {
+                m1 = ms_get(&store, arg1);
+                m2 = ms_get(&store, arg2);
+                if (m1 && m2) result = matrix_cross(m1, m2);
+            } else if (strcmp(cmd, "magnitude") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) scalar_result = matrix_magnitude(m1);
+            } else if (strcmp(cmd, "normalize") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) result = matrix_normalize(m1);
+            } else if (strcmp(cmd, "sin") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) result = matrix_apply_func(m1, sin);
+            } else if (strcmp(cmd, "cos") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) result = matrix_apply_func(m1, cos);
+            } else if (strcmp(cmd, "exp") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) result = matrix_apply_func(m1, exp);
+            } else if (strcmp(cmd, "log") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) result = matrix_apply_func(m1, log);
+            } else if (strcmp(cmd, "abs") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) result = matrix_apply_func(m1, fabs);
+            } else if (strcmp(cmd, "sqrt") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) result = matrix_apply_func(m1, sqrt);
+            } else if (strcmp(cmd, "identity") == 0 && args >= 2) {
+                int n = atoi(arg1);
+                if (n > 0) result = matrix_identity(n);
+            } else if (strcmp(cmd, "zeros") == 0 && args >= 3) {
+                int m = atoi(arg1);
+                int n = atoi(arg2);
+                if (m > 0 && n > 0) result = matrix_create(m, n);
+            } else if (strcmp(cmd, "ones") == 0 && args >= 3) {
+                int m = atoi(arg1);
+                int n = atoi(arg2);
+                if (m > 0 && n > 0) {
+                    result = matrix_create(m, n);
+                    for (int i = 0; i < m; i++)
+                        for (int j = 0; j < n; j++)
+                            result->data[i][j] = 1.0;
+                }
+            } else if (strcmp(cmd, "diag") == 0 && args >= 2) {
+                Matrix *v = ms_get(&store, arg1);
+                if (v) result = matrix_diag(v);
+            } else if (strcmp(cmd, "frobenius") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) scalar_result = matrix_frobenius(m1);
+            } else if (strcmp(cmd, "norm1") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) scalar_result = matrix_norm1(m1);
+            } else if (strcmp(cmd, "norminf") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) scalar_result = matrix_norminf(m1);
+            } else if (strcmp(cmd, "lu") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) {
+                    Matrix *L = NULL, *U = NULL;
+                    matrix_lu(m1, &L, &U);
+                    if (L && U) {
+                        printf("L:\n");
+                        matrix_print(L);
+                        printf("U:\n");
+                        matrix_print(U);
+                        matrix_free(L);
+                        matrix_free(U);
+                    }
+                }
+            } else if (strcmp(cmd, "qr") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) {
+                    Matrix *Q = NULL, *R = NULL;
+                    matrix_qr(m1, &Q, &R);
+                    if (Q && R) {
+                        printf("Q:\n");
+                        matrix_print(Q);
+                        printf("R:\n");
+                        matrix_print(R);
+                        matrix_free(Q);
+                        matrix_free(R);
+                    }
+                }
+            } else if (strcmp(cmd, "cholesky") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) {
+                    Matrix *L = NULL;
+                    if (matrix_cholesky(m1, &L) && L) {
+                        printf("L:\n");
+                        matrix_print(L);
+                        matrix_free(L);
+                    }
+                }
+            } else if (strcmp(cmd, "eig") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) {
+                    double *real = NULL, *imag = NULL;
+                    int n = matrix_eig(m1, &real, &imag);
+                    if (n > 0) {
+                        printf("Eigenvalues:\n");
+                        for (int i = 0; i < n; i++) {
+                            printf("  %.4f + %.4fi\n", real[i], imag[i]);
+                        }
+                        free(real);
+                        free(imag);
+                    }
+                }
+            } else if (strcmp(cmd, "svd") == 0 && args >= 2) {
+                m1 = ms_get(&store, arg1);
+                if (m1) {
+                    Matrix *U = NULL, *S = NULL, *V = NULL;
+                    int n = matrix_svd(m1, &U, &S, &V);
+                    if (n > 0) {
+                        printf("U:\n");
+                        matrix_print(U);
+                        printf("Singular values:\n");
+                        matrix_print(S);
+                        printf("V:\n");
+                        matrix_print(V);
+                        matrix_free(U);
+                        matrix_free(S);
+                        matrix_free(V);
+                    }
+                }
+            }
+            
+            if (result) {
+                matrix_print(result);
+                matrix_free(result);
+            } else if (scalar_result != 0 || (args >= 2 && (strstr(cmd, "det") || strstr(cmd, "trace") || strstr(cmd, "rank") || strstr(cmd, "magnitude") || strstr(cmd, "frobenius") || strstr(cmd, "norm")))) {
+                printf("  = %.6f\n", scalar_result);
             } else {
-                printf("Error: Unknown command. Type 'help' for options.\n");
+                Matrix *mat = ms_get(&store, input);
+                if (mat) {
+                    matrix_print(mat);
+                } else {
+                    printf("Error: Unknown command. Type 'help' for options.\n");
+                }
             }
         }
     }
