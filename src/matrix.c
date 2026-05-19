@@ -19,18 +19,23 @@ Matrix *ms_get(MatrixStore *store, const char *name) {
 }
 
 int ms_set(MatrixStore *store, const char *name, Matrix *mat) {
-    Matrix *existing = ms_get(store, name);
-    if (existing) {
-        matrix_free(existing);
-        existing->rows = mat->rows;
-        existing->cols = mat->cols;
-        existing->data = mat->data;
-        strncpy(existing->name, name, MAX_NAME_LEN - 1);
-        free(mat);
-        return 1;
+    for (int i = 0; i < store->count; i++) {
+        if (strcmp(store->matrices[i].name, name) == 0) {
+            if (store->matrices[i].data) {
+                for (int r = 0; r < store->matrices[i].rows; r++) {
+                    free(store->matrices[i].data[r]);
+                }
+                free(store->matrices[i].data);
+            }
+            store->matrices[i].rows = mat->rows;
+            store->matrices[i].cols = mat->cols;
+            store->matrices[i].data = mat->data;
+            return 1;
+        }
     }
     
     if (store->count >= MAX_MATRICES) {
+        matrix_free(mat);
         return 0;
     }
     
@@ -39,7 +44,6 @@ int ms_set(MatrixStore *store, const char *name, Matrix *mat) {
     store->matrices[store->count].data = mat->data;
     strncpy(store->matrices[store->count].name, name, MAX_NAME_LEN - 1);
     store->count++;
-    free(mat);
     return 1;
 }
 
