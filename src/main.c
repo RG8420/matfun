@@ -81,16 +81,6 @@ static void print_prompt() {
     fflush(stdout);
 }
 
-static Matrix *get_matrix_arg(char **args, int arg_count, int idx) {
-    if (idx >= arg_count) return NULL;
-    return ms_get(&store, args[idx]);
-}
-
-static double get_scalar_arg(char **args, int arg_count, int idx) {
-    if (idx >= arg_count) return 0;
-    return atof(args[idx]);
-}
-
 static void handle_command(char *input) {
     char var_name[MAX_NAME_LEN];
     char expr[1024];
@@ -279,8 +269,8 @@ static void handle_command(char *input) {
             } else if (strcmp(cmd, "eig") == 0 && args >= 2) {
                 m1 = ms_get(&store, arg1);
                 if (m1) {
-                    double *evals;
-                    Matrix *evectors;
+                    double *evals = NULL;
+                    Matrix *evectors = NULL;
                     if (matrix_eig(m1, &evals, &evectors)) {
                         printf("Eigenvalues:\n");
                         for (int i = 0; i < m1->rows; i++) {
@@ -497,15 +487,17 @@ static void handle_command(char *input) {
             } else if (strcmp(cmd, "eig") == 0 && args >= 2) {
                 m1 = ms_get(&store, arg1);
                 if (m1) {
-                    double *real = NULL, *imag = NULL;
-                    int n = matrix_eig(m1, &real, &imag);
-                    if (n > 0) {
+                    double *evals = NULL;
+                    Matrix *evectors = NULL;
+                    if (matrix_eig(m1, &evals, &evectors)) {
                         printf("Eigenvalues:\n");
-                        for (int i = 0; i < n; i++) {
-                            printf("  %.4f + %.4fi\n", real[i], imag[i]);
+                        for (int i = 0; i < m1->rows; i++) {
+                            printf("  %.4f\n", evals[i]);
                         }
-                        free(real);
-                        free(imag);
+                        printf("Eigenvectors:\n");
+                        matrix_print(evectors);
+                        free(evals);
+                        matrix_free(evectors);
                     }
                 }
             } else if (strcmp(cmd, "svd") == 0 && args >= 2) {
